@@ -143,11 +143,15 @@ if __name__ == '__main__':
     pwm.setPWMFreq(50)  # 设置 PWM 频率为 50Hz
     while True:
         # 从 500 到 2500 微秒逐步增加脉冲宽度
-        for i in range(500, 2500, 10):
+        for i in range(0, 2500, 10):
             pwm.setServoPulse(0, i)
-            time.sleep(0.02)
+            print(i)
+            print("============================================")
+            time.sleep(0.2)
 
         # 从 2500 到 500 微秒逐步减少脉冲宽度
         for i in range(2500, 500, -10):
             pwm.setServoPulse(0, i)
-            time.sleep(0.02)
+            print(i)
+            print("============================================")
+            time.sleep(0.2)
