@@ -125,7 +125,20 @@ class ServoController:
         # 设置PWM脉冲
         self.pwm.setServoPulse(channel, pulse)
         print(f"通道 {channel} 设置角度: {angle}°, 脉冲宽度: {pulse:.2f}us")
+        # 关键修复：更新当前角度
+        config['current_angle'] = angle
+    def get_angle(self, channel):
+        """
+        获取指定通道舵机的当前角度
         
+        :param channel: 舵机通道
+        :return: 当前角度（浮点数），若通道未配置则返回 None
+        """
+        if channel not in self.servo_config:
+            print(f"警告：通道 {channel} 未配置舵机，无法获取角度")
+            return None
+        return self.servo_config[channel]['current_angle']
+    
     def set_angle_with_speed(self, channel, target_angle, speed=100):   
         """
         设置指定通道舵机角度，带速度控制
@@ -168,7 +181,7 @@ class ServoController:
 
 def demo_180_degree_servo():
     """180度舵机控制示例"""
-    controller = ServoController()
+    controller = ServoController(50)
     
     # 添加舵机配置 (通道0, 180度舵机)
     controller.add_servo(0, min_pulse=250, max_pulse=1250, max_angle=270)
@@ -177,15 +190,18 @@ def demo_180_degree_servo():
         print("180度舵机控制示例")
         while True:
             # 从0度到180度循环
-            for angle in range(0, 180, 10):
-                speed=angle/10
+            for angle in range(0, 180, 5):
+                print(f"forward:{angle}")
+                speed=angle
                 controller.set_angle_with_speed(0, angle,speed)
-                time.sleep(0.1)
-                
+                # time.sleep(1)
+            print("="*10)
             # 从180度到0度循环
-            for angle in range(180, -1, -10):
-                controller.set_angle(0, angle)
-                time.sleep(0.1)
+            for angle in range(180-5, -1, -5):
+                print("inverse")
+                controller.set_angle_with_speed(0, angle,speed)
+                # time.sleep(1)
+            print("-"*10)
     except KeyboardInterrupt:
         print("程序已停止")
 
