@@ -4,6 +4,7 @@
 
 
 ## 位置调试校准
+
 ### **关键分析步骤**
 1. **已知条件**：
    - 当角度为 **0°** 时，脉冲宽度为 **250 μs**（对应 `min_pulse`）。
@@ -88,3 +89,5 @@ controller.add_servo(0, min_pulse=250, max_pulse=1383, max_angle=270)
     ```python
     controller.add_servo(6, min_pulse=250, max_pulse=1299, max_angle=270)
     ```
+
+## 速度平滑

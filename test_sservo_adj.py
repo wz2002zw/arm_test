@@ -1,23 +1,23 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import time
 import math
 import smbus
 
-# PCA9685寄存器地址（改为单下划线前缀）
-_SUBADR1            = 0x02
-_SUBADR2            = 0x03
-_SUBADR3            = 0x04
-_MODE1              = 0x00
-_PRESCALE           = 0xFE
-_LED0_ON_L          = 0x06
-_LED0_ON_H          = 0x07
-_LED0_OFF_L         = 0x08
-_LED0_OFF_H         = 0x09
-_ALLLED_ON_L        = 0xFA
-_ALLLED_ON_H        = 0xFB
-_ALLLED_OFF_L       = 0xFC
-_ALLLED_OFF_H       = 0xFD
+# PCA9685寄存器地址
+_SUBADR1 = 0x02
+_SUBADR2 = 0x03
+_SUBADR3 = 0x04
+_MODE1 = 0x00
+_PRESCALE = 0xFE
+_LED0_ON_L = 0x06
+_LED0_ON_H = 0x07
+_LED0_OFF_L = 0x08
+_LED0_OFF_H = 0x09
+_ALLLED_ON_L = 0xFA
+_ALLLED_ON_H = 0xFB
+_ALLLED_OFF_L = 0xFC
+_ALLLED_OFF_H = 0xFD
 
 class PCA9685:
     """控制PCA9685 16通道PWM驱动模块的类"""
@@ -35,13 +35,13 @@ class PCA9685:
         """向指定寄存器写入一个8位值"""
         self.bus.write_byte_data(self.address, reg, value)
         if self.debug:
-            print("I2C: Write 0x%02X to register 0x%02X" % (value, reg))
+            print(f"I2C: Write 0x{value:02X} to register 0x{reg:02X}")
 
     def read(self, reg):
         """从I2C设备读取一个无符号字节"""
         result = self.bus.read_byte_data(self.address, reg)
         if self.debug:
-            print("I2C: Device 0x%02X returned 0x%02X from reg 0x%02X" % (self.address, result & 0xFF, reg))
+            print(f"I2C: Device 0x{self.address:02X} returned 0x{result & 0xFF:02X} from reg 0x{reg:02X}")
         return result
 
     def setPWMFreq(self, freq):
@@ -51,11 +51,11 @@ class PCA9685:
         prescaleval /= float(freq)
         prescaleval -= 1.0
         if self.debug:
-            print("Setting PWM frequency to %d Hz" % freq)
-            print("Estimated pre-scale: %d" % prescaleval)
+            print(f"Setting PWM frequency to {freq} Hz")
+            print(f"Estimated pre-scale: {prescaleval}")
         prescale = math.floor(prescaleval + 0.5)
         if self.debug:
-            print("Final pre-scale: %d" % prescale)
+            print(f"Final pre-scale: {prescale}")
 
         oldmode = self.read(_MODE1)
         newmode = (oldmode & 0x7F) | 0x10  # 进入睡眠模式以修改预分频器
@@ -72,7 +72,7 @@ class PCA9685:
         self.write(_LED0_OFF_L + 4 * channel, off & 0xFF)
         self.write(_LED0_OFF_H + 4 * channel, off >> 8)
         if self.debug:
-            print("channel: %d  LED_ON: %d LED_OFF: %d" % (channel, on, off))
+            print(f"channel: {channel}  LED_ON: {on} LED_OFF: {off}")
 
     def setServoPulse(self, channel, pulse):
         """设置伺服电机脉冲宽度"""
@@ -124,9 +124,9 @@ class ServoController:
         
         # 设置PWM脉冲
         self.pwm.setServoPulse(channel, pulse)
-        print(f"通道 {channel} 设置角度: {angle}°, 脉冲宽度: {pulse:.2f}us")
-        # 关键修复：更新当前角度
         config['current_angle'] = angle
+        return angle, pulse
+    
     def get_angle(self, channel):
         """
         获取指定通道舵机的当前角度
@@ -139,17 +139,16 @@ class ServoController:
             return None
         return self.servo_config[channel]['current_angle']
     
-    def set_angle_with_speed(self, channel, target_angle, speed=100):   
+    def set_angle_with_speed(self, channel, target_angle, angular_speed=30, fixed_delay=0.005, min_step=1):
         """
-        设置指定通道舵机角度，带速度控制
+        设置指定通道舵机角度，基于固定延时的速度控制
         
         :param channel: 舵机通道
         :param target_angle: 目标角度
-        :param speed: 速度百分比 (0-100)，值越大速度越快
+        :param angular_speed: 角速度 (度/秒)
+        :param fixed_delay: 固定延时时间(秒)，默认0.01秒
+        :param min_step: 最小步长，确保步长不小于此值
         """
-        min_delay=0.0001
-        max_delay=0.01
-        step_size = 2  # 每步角度变化量
         if channel not in self.servo_config:
             raise ValueError(f"通道 {channel} 未配置舵机")
             
@@ -162,26 +161,26 @@ class ServoController:
         current_angle = config['current_angle']
         
         # 如果目标角度与当前角度相同，直接返回
-        if abs(target_angle - current_angle) < 1:
+        if abs(target_angle - current_angle) < 0.1:
             return
             
-        # 计算步数和延时
-        
+        # 计算所需的步长
         direction = 1 if target_angle > current_angle else -1
+        step_size = max(min_step, angular_speed * fixed_delay)
         
-        # 根据速度计算延时（速度越大，延时越小）
-        # 基础延时为0.02秒，速度100%时延时为0.005秒
-        delay_time = max_delay - (0.015 * (speed / 100.0))
-        delay_time = max(min_delay, delay_time)  # 确保最小延时
-        print(delay_time)
+        # 计算步数
+        steps = int(abs(target_angle - current_angle) / step_size) + 1
+        
         # 逐步移动到目标角度
-        for angle in range(int(current_angle), int(target_angle) + direction, direction * step_size):
-            self.set_angle(channel, angle)
-            time.sleep(delay_time)
+        for _ in range(steps):
+            current_angle += direction * step_size
             
-        # 确保最终到达目标角度
-        self.set_angle(channel, target_angle)
-
+            # 确保不超过目标角度
+            if (direction > 0 and current_angle > target_angle) or (direction < 0 and current_angle < target_angle):
+                current_angle = target_angle
+                
+            self.set_angle(channel, current_angle)
+            time.sleep(fixed_delay)
 def demo_180_degree_servo():
     """180度舵机控制示例"""
     controller = ServoController(50)
@@ -192,82 +191,17 @@ def demo_180_degree_servo():
     try:
         print("180度舵机控制示例")
         while True:
-            # 从0度到180度循环
-            for angle in range(0, 180, 5):
-                print(f"forward:{angle}")
-                speed=angle
-                controller.set_angle_with_speed(0, angle,1)
-                # time.sleep(1)
-            print("="*10)
-            # 从180度到0度循环
-            for angle in range(180-5, -1, -5):
-                print("inverse")
-                controller.set_angle_with_speed(0, angle,1)
-                # time.sleep(1)
-            print("-"*10)
+            # 从0度到180度循环 - 慢速
+            print("慢速转动: 0° -> 180°")
+            controller.set_angle_with_speed(0, 180, angular_speed=1000)
+            
+            # 从180度到0度循环 - 快速
+            print("快速转动: 180° -> 0°")
+            # controller.set_angle_with_speed(0, 90, angular_speed=10000)
+            controller.set_angle_with_speed(0, 0, angular_speed=10000)
+            print("-"*30)
     except KeyboardInterrupt:
         print("程序已停止")
 
-# def demo_270_degree_servo():
-#     """270度舵机控制示例"""
-#     controller = ServoController()
-    
-#     # 添加舵机配置 (通道1, 270度舵机)
-#     controller.add_servo(1, min_pulse=500, max_pulse=2500, max_angle=270)
-    
-#     try:
-#         print("270度舵机控制示例")
-#         while True:
-#             # 从0度到270度循环
-#             for angle in range(0, 271, 15):
-#                 controller.set_angle(1, angle)
-#                 time.sleep(0.1)
-                
-#             # 从270度到0度循环
-#             for angle in range(270, -1, -15):
-#                 controller.set_angle(1, angle)
-#                 time.sleep(0.1)
-#     except KeyboardInterrupt:
-#         print("程序已停止")
-
-# def demo_360_degree_servo():
-#     """360度连续旋转舵机控制示例"""
-#     controller = ServoController()
-    
-#     # 添加舵机配置 (通道2, 360度连续旋转舵机)
-#     controller.add_servo(2, min_pulse=500, max_pulse=2500, max_angle=100)  # 使用百分比控制速度
-    
-#     try:
-#         print("360度连续旋转舵机控制示例")
-#         while True:
-#             print("正向最大速度")
-#             controller.set_angle(2, 0)  # 0% 对应最大正向速度
-#             time.sleep(2)
-            
-#             print("慢速正向旋转")
-#             controller.set_angle(2, 40)  # 40% 对应慢速正向旋转
-#             time.sleep(2)
-            
-#             print("停止")
-#             controller.set_angle(2, 50)  # 50% 对应停止
-#             time.sleep(2)
-            
-#             print("慢速反向旋转")
-#             controller.set_angle(2, 60)  # 60% 对应慢速反向旋转
-#             time.sleep(2)
-            
-#             print("反向最大速度")
-#             controller.set_angle(2, 100)  # 100% 对应最大反向速度
-#             time.sleep(2)
-            
-#             print("停止")
-#             controller.set_angle(2, 50)  # 50% 对应停止
-#             time.sleep(2)
-#     except KeyboardInterrupt:
-#         print("程序已停止")
-
 if __name__ == "__main__":
-    # 选择要运行的示例
-    demo_180_degree_servo()
-    # demo_270_degree_servo()
-    # demo_360_degree_servo()    
+    demo_180_degree_servo()    
