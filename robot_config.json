@@ -1,0 +1,6 @@
+{
+    "controller": {
+        "pwm_freq": 50
+    },
+    "joints": []
+}
