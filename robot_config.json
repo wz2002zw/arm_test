@@ -2,5 +2,51 @@
     "controller": {
         "pwm_freq": 50
     },
-    "joints": [30,30,30,30,30]
+    "joints": [
+        {
+            "channel": 0,
+            "name": "joint_0",
+            "min_pulse": 250,
+            "max_pulse": 1317,
+            "max_angle": 270,
+            "home_angle": 135,
+            "inverse": false
+        },
+        {
+            "channel": 1,
+            "name": "joint_1",
+            "min_pulse": 250,
+            "max_pulse": 1383,
+            "max_angle": 270,
+            "home_angle": 135,
+            "inverse": false
+        },
+        {
+            "channel": 2,
+            "name": "joint_2",
+            "min_pulse": 250,
+            "max_pulse": 1383,
+            "max_angle": 270,
+            "home_angle": 135,
+            "inverse": false
+        },
+        {
+            "channel": 3,
+            "name": "joint_3",
+            "min_pulse": 250,
+            "max_pulse": 1383,
+            "max_angle": 270,
+            "home_angle": 135,
+            "inverse": false
+        },
+        {
+            "channel": 4,
+            "name": "joint_4",
+            "min_pulse": 250,
+            "max_pulse": 1383,
+            "max_angle": 270,
+            "home_angle": 135,
+            "inverse": false
+        }
+    ]
 }

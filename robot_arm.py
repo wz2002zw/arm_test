@@ -4,9 +4,9 @@ import json
 import time
 import math
 import smbus
-import json
 from typing import Dict, List, Tuple, Optional
 import threading
+
 class Joint:
     """机器人关节基类"""
     
@@ -44,7 +44,7 @@ class Joint:
         
         # 移动到初始位置
         self.move_to(home_angle, speed=30)
-        
+    
     def move_to(self, angle: float, speed: float = 30, fixed_delay: float = 0.01):
         """移动关节到指定角度"""
         actual_angle = angle
@@ -54,7 +54,7 @@ class Joint:
         self.controller.set_angle_with_speed(
             self.channel, 
             actual_angle, 
-            angular_speed=speed, 
+            angular_speed=speed,  # 这里设置舵机转动的速度
             fixed_delay=fixed_delay
         )
         print(f"关节 {self.name}({self.channel}) 移动到 {angle}°")
@@ -127,8 +127,6 @@ class Robot:
             joint.move_to_home(speed)
         print("已到达初始位置")
     
-
-
     def move(self, angles: Dict[str, float], speeds: Dict[str, float]):
         """同时移动所有关节"""
         if len(angles) != len(speeds):
@@ -147,8 +145,6 @@ class Robot:
         # 等待所有线程完成
         for thread in threads:
             thread.join()
-
-
         
     def get_joint_positions(self) -> Dict[str, float]:
         """获取所有关节的当前位置"""

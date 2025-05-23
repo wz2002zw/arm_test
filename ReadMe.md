@@ -63,7 +63,7 @@ controller.add_servo(0, min_pulse=250, max_pulse=1383, max_angle=270)
 ### 舵机记录
 - joint_0
     ```python
-    controller.add_servo(0, min_pulse=250, max_pulse=1282, max_angle=270)
+    controller.add_servo(0, min_pulse=250, max_pulse=1317, max_angle=270)
     ```
 - joint_1
     ```python
@@ -83,11 +83,69 @@ controller.add_servo(0, min_pulse=250, max_pulse=1383, max_angle=270)
     ```
 - joint_5
     ```python
-    controller.add_servo(5, min_pulse=250, max_pulse=1383, max_angle=270)
-    ```
-- joint_6
-    ```python
-    controller.add_servo(6, min_pulse=250, max_pulse=1299, max_angle=270)
+    controller.add_servo(5, min_pulse=250, max_pulse=1317, max_angle=270)
     ```
 
 ## 速度平滑
+
+## 机械臂运行
+需要在robot_config.py中修改"joints": [],在中添加需要运行的关节舵机配置。
+### 例如舵机0号
+``` bash
+"joints": [
+        {
+            "channel": 0,
+            "name": "joint_0",
+            "min_pulse": 500,
+            "max_pulse": 2500,
+            "max_angle": 180,
+            "home_angle": 90,
+            "inverse": false
+        },
+]
+```
+后续的舵机需要依次添加
+## 舵机测试
+### 针对同一个舵机测试在不同角度和不同速度的运行效果
+舵机 0: 当前角度 0.0° ✅
+
+[测试步骤2/3] 同步控制测试...
+目标参数:
+舵机 0: 60° @ 2°/s
+
+[测试步骤3/3] 同步性验证（总耗时: 0.60秒）
+舵机 0: 目标角度 60° → 实际角度 60.0° (理论时间 30.00秒 → 实际耗时 0.60秒)
+
+舵机 0: 当前角度 0.0° ✅
+
+[测试步骤2/3] 同步控制测试...
+目标参数:
+舵机 0: 30° @ 1°/s
+
+[测试步骤3/3] 同步性验证（总耗时: 0.30秒）
+舵机 0: 目标角度 30° → 实际角度 30.0° (理论时间 30.00秒 → 实际耗时 0.30秒)
+
+原因：
+
+``` bash
+    step_size = max(1, state['current_speed'] * fixed_delay)
+```
+这行代码将步长限制为至少 1 度，无论计算出的 state['current_speed'] * fixed_delay 有多小。这导致了即使设置了较低的角速度，舵机也会以较大的步长移动，从而大大缩短了到达目标角度的时间。
+
+修改为
+
+``` bash
+    step_size = state['current_speed'] * fixed_delay
+``` 
+修改后测试结果如下：    
+第一次测试      
+舵机 0: 目标角度 90° → 实际角度 90.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+舵机 1: 目标角度 90° → 实际角度 90.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+舵机 2: 目标角度 90° → 实际角度 90.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+舵机 3: 目标角度 90° → 实际角度 90.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+第二次测试      
+舵机 0: 目标角度 30° → 实际角度 30.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+舵机 1: 目标角度 30° → 实际角度 30.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+舵机 2: 目标角度 30° → 实际角度 30.0° (理论时间 15.00秒 → 实际耗时 15.34秒)     
+舵机 3: 目标角度 30° → 实际角度 30.0° (理论时间 15.00秒 → 实际耗时 15.34秒)      
+结果发现在不同角度和不同速度下，角度和速度相同倍率的情况下运行时间相同

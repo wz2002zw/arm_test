@@ -265,9 +265,55 @@ def demo_180_degree_servo():
 #             time.sleep(2)
 #     except KeyboardInterrupt:
 #         print("程序已停止")
-
+def demo_servo_pulse_control():
+    """脉冲宽度控制舵机测试 - 允许输入脉冲值(us)直接控制舵机"""
+    controller = ServoController(50)
+    
+    # 添加舵机配置（通道0，设置较大的脉冲范围以支持270度舵机）
+    controller.add_servo(0, min_pulse=250, max_pulse=2500, max_angle=270)
+    print("脉冲宽度控制舵机测试已启动")
+    print("支持的脉冲范围: 500-2500us (建议从1000开始测试)")
+    print("输入 'q' 或 'quit' 退出测试")
+    
+    try:
+        while True:
+            # 获取用户输入的脉冲值
+            pulse_input = input("\n请输入脉冲宽度(us)或输入'q'退出: ")
+            
+            # 退出条件
+            if pulse_input.lower() in ['q', 'quit', 'exit']:
+                break
+                
+            # 验证输入是否为数字
+            if not pulse_input.isdigit():
+                print("错误: 请输入有效的数字")
+                continue
+                
+            pulse = int(pulse_input)
+            
+            # 限制脉冲范围
+            if pulse < 500 or pulse > 2500:
+                print(f"警告: 脉冲值应在500-2500us之间，当前输入{pulse}us已被限制")
+                pulse = max(500, min(2500, pulse))
+            
+            # 发送脉冲控制舵机
+            controller.pwm.setServoPulse(0, pulse)
+            current_angle = controller.get_angle(0)
+            print(f"已发送脉冲: {pulse}us, 当前角度: {current_angle:.1f}°")
+            
+    except KeyboardInterrupt:
+        print("\n程序被中断")
+    except Exception as e:
+        print(f"发生错误: {e}")
+    finally:
+        # 测试完成后将舵机归位到中间位置
+        print("测试结束，将舵机归位...")
+        controller.pwm.setServoPulse(0, 1500)  # 中间位置脉冲
+        time.sleep(1)
+        print("舵机已归位")
 if __name__ == "__main__":
     # 选择要运行的示例
-    demo_180_degree_servo()
+    # demo_180_degree_servo()
     # demo_270_degree_servo()
-    # demo_360_degree_servo()    
+    # demo_360_degree_servo() 
+    demo_servo_pulse_control()   
