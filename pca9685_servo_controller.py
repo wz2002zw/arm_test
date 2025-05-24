@@ -484,40 +484,45 @@ def demo_demo_180_degree_servo_test():
             pass
         print("程序已停止")
 def test_servo_reset_and_sync():
-    """测试舵机归零功能及同步到达性能"""
+    """测试舵机归零功能及同步到达性能，包含测试后缓慢归零"""
     controller = ServoController(50)
     
-    # 添加四个舵机配置
-    controller.add_servo(0, min_pulse=250, max_pulse=1282, max_angle=270)
-    controller.add_servo(1, min_pulse=250, max_pulse=1383, max_angle=270)
-    controller.add_servo(2, min_pulse=250, max_pulse=1383, max_angle=270)
-    controller.add_servo(3, min_pulse=250, max_pulse=1383, max_angle=270)
+    # 添加六个舵机配置
+    controller.add_servo(0, min_pulse=250, max_pulse=1306, max_angle=270)
+    controller.add_servo(1, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(2, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(3, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(4, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(5, min_pulse=250, max_pulse=1306, max_angle=270)
     controller.reset_all_servos_to_zero()
-    # 等待舵机归零完成
-    time.sleep(2)
+    
     try:
-        # 定义测试目标（角度与速度比例为1:1）
-        test_targets = [
-            {'channel': 0, 'angle': 120, 'speed': 8},   # 30°@1°/s (30秒)
-            {'channel': 1, 'angle': 120, 'speed': 8},   # 60°@2°/s (30秒)
-            {'channel': 2, 'angle': 120, 'speed': 8},   # 90°@3°/s (30秒)
-            {'channel': 3, 'angle': 120, 'speed': 8}   # 120°@4°/s (30秒)
-        ]
+        max_speed = 5  # 建议初始值为5-10，根据实际情况调整
+        angle_offset = 90 # 偏移角度
         
+        print(f"基于当前位置偏移{angle_offset}度的舵机控制测试（速度限制: {max_speed}度/秒）")
+        
+        # 初始化: 将所有舵机移动到初始位置
+        print("\n初始化: 将所有舵机移动到初始位置")
+        test_targets = [
+            {'channel': 0, 'angle': 30, 'speed': 2},   # 30°@2°/s (15秒)
+            {'channel': 1, 'angle': 30, 'speed': 2},  
+            {'channel': 2, 'angle': 30, 'speed': 2},   
+            {'channel': 3, 'angle': 30, 'speed': 2},
+            {'channel': 4, 'angle': 30, 'speed': 2},
+            {'channel': 5, 'angle': 30, 'speed': 2}   
+        ]
+        time.sleep(1)
         print("==== 舵机归零与同步到达测试 ====")
         
-        # 1. 执行舵机归零（逐个设置到0°，每个间隔1秒）
-        print("\n[测试步骤1/3] 执行舵机归零...")
-        controller.reset_all_servos_to_zero()
-        
-        # 验证归零结果
+        # 1. 执行舵机归零（测试前归零）
         print("[归零验证] 检查各舵机角度:")
         for target in test_targets:
             angle = controller.get_angle(target['channel'])
             print(f"舵机 {target['channel']}: 当前角度 {angle:.1f}° {'✅' if angle < 5 else '❌'}")
         time.sleep(1)
         
-        # 2. 同步控制测试（理论上30秒同时到达）
+        # 2. 同步控制测试（理论上15秒同时到达）
         print("\n[测试步骤2/3] 同步控制测试...")
         print("目标参数:")
         for target in test_targets:
@@ -546,12 +551,27 @@ def test_servo_reset_and_sync():
                   f"(理论时间 {target_time:.2f}秒 → 实际耗时 {total_time:.2f}秒)")
         
         print(f"\n同步性结果: {'✅ 成功' if is_sync else '❌ 失败'}")
-        print("==== 测试完成 ====")
         
     except KeyboardInterrupt:
         print("程序已停止")
     except Exception as e:
         print(f"测试错误: {e}")
+    finally:
+        # 测试结束后执行缓慢归零（核心修改点）
+        print("\n[等待2秒后执行舵机缓慢归零...]")
+        time.sleep(2)  # 添加2秒延时
+        print("\n[测试后处理] 执行舵机缓慢归零...")
+        for channel in sorted(controller.servo_config.keys()):
+            print(f"舵机 {channel} 开始缓慢归零...")
+            controller.set_angle_with_speed(
+                channel, 
+                target_angle=0, 
+                angular_speed=3,  # 3°/秒更低速度，确保安全
+                fixed_delay=0.02   # 增加延时，进一步降低电流
+            )
+            time.sleep(1)  # 每个舵机归零后等待1秒，避免同时运动
+        
+        print("所有舵机已安全归零，测试完成")
 def demo_servo_pulse_control():
     """脉冲宽度控制舵机测试 - 允许输入脉冲值(us)直接控制舵机"""
     controller = ServoController(50)
@@ -601,5 +621,5 @@ def demo_servo_pulse_control():
 if __name__ == "__main__":
     # demo_180_degree_servo()
     # demo_demo_180_degree_servo_test()
-    # test_servo_reset_and_sync()
-    demo_servo_pulse_control()
+    test_servo_reset_and_sync()
+    # demo_servo_pulse_control()

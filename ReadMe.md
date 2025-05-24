@@ -63,27 +63,27 @@ controller.add_servo(0, min_pulse=250, max_pulse=1383, max_angle=270)
 ### 舵机记录
 - joint_0
     ```python
-    controller.add_servo(0, min_pulse=250, max_pulse=1317, max_angle=270)
+    controller.add_servo(0, min_pulse=250, max_pulse=1306, max_angle=270)
     ```
 - joint_1
     ```python
-    controller.add_servo(1, min_pulse=250, max_pulse=1383, max_angle=270)
+    controller.add_servo(1, min_pulse=250, max_pulse=1283, max_angle=270)
     ```
 - joint_2
     ```python
-    controller.add_servo(2, min_pulse=250, max_pulse=1383, max_angle=270)
+    controller.add_servo(2, min_pulse=250, max_pulse=1283, max_angle=270)
     ```
 - joint_3
     ```python
-    controller.add_servo(3, min_pulse=250, max_pulse=1383, max_angle=270)
+    controller.add_servo(3, min_pulse=250, max_pulse=1283, max_angle=270)
     ```
 - jonnt_4
     ```python
-    controller.add_servo(4, min_pulse=250, max_pulse=1383, max_angle=270)
+    controller.add_servo(4, min_pulse=250, max_pulse=1283, max_angle=270)
     ```
 - joint_5
     ```python
-    controller.add_servo(5, min_pulse=250, max_pulse=1317, max_angle=270)
+    controller.add_servo(5, min_pulse=250, max_pulse=1306, max_angle=270)
     ```
 
 ## 速度平滑
