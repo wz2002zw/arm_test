@@ -457,7 +457,93 @@ class RobotKinematics:
         self.__T3_math = T03_total
         self.__T4_math = T04_total
         return T00, T01_total, T02_total, T03_total, T04_total, p0, p1, p2, p3, p4
+    
 
+    def __forward_kinematics_math_for_training_core(self, theta0, theta1, theta2, theta3, theta4):
+        """
+        计算机械臂的正向运动学（用于训练的核心数学计算部分）
+        
+        使用DH参数法计算从基座到末端执行器的变换矩阵，并提取位置和旋转矩阵元素。
+        
+        参数:
+            theta0 (float): 关节0的角度（弧度）
+            theta1 (float): 关节1的角度（弧度）
+            theta2 (float): 关节2的角度（弧度）
+            theta3 (float): 关节3的角度（弧度）
+            theta4 (float): 关节4的角度（弧度）
+            
+        返回:
+            tuple: 包含以下元素的元组
+                x, y, z (float): 末端执行器的3D坐标
+                r00-r22 (float): 旋转矩阵的9个元素（3x3矩阵按行展开）
+                self.type_1: 类型参数1（具体含义取决于类实现）
+                self.type_2: 类型参数2（具体含义取决于类实现）
+        """
+        
+        # 使用DH参数法计算各关节的变换矩阵
+        T00 = self.dh_transform(theta0, 0, 0, PI/2)  # 基座到关节0的变换
+        T01 = self.dh_transform(theta1, 0, self.L1, 0)  # 关节0到关节1的变换
+        T02 = self.dh_transform(theta2, 0, self.L2, 0)  # 关节1到关节2的变换
+        T03 = self.dh_transform(theta3, 0, self.L3, 0)  # 关节2到关节3的变换
+        
+        # 特殊处理关节4的变换（包含固定偏移）
+        T14 = self.dh_transform(PI/2, 0, 0, PI/2)  # 关节3到关节4的固定变换
+        T04 = np.dot(T14, self.dh_transform(theta4, 0, self.L4, 0))  # 完整的关节4变换
+        
+        # 累积计算从基座到末端执行器的总变换矩阵
+        T01_total = np.dot(T00, T01)
+        T02_total = np.dot(T01_total, T02)
+        T03_total = np.dot(T02_total, T03)
+        T04_total = np.dot(T03_total, T04)
+        
+        # 从总变换矩阵中提取旋转矩阵元素
+        r00, r01, r02 = T04_total[0, :3]
+        r10, r11, r12 = T04_total[1, :3]
+        r20, r21, r22 = T04_total[2, :3]
+        
+        # 提取末端执行器的位置坐标
+        x, y, z = T04_total[:3, 3]
+        
+        return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2
+    
+    def __forward_kinematics_math_for_training(self, s0, c0, s1, c1, s2, c2, s3, c3, s4, c4):
+        """
+        计算五关节机器人的正运动学（用于训练场景）。
+        
+        通过给定的关节角度的正弦和余弦值，计算各关节的实际角度，并调用核心正运动学计算函数。
+        
+        参数:
+            s0 (float): 第0关节角度的正弦值（sin(theta0)）
+            c0 (float): 第0关节角度的余弦值（cos(theta0)）
+            s1 (float): 第1关节角度的正弦值（sin(theta1)）
+            c1 (float): 第1关节角度的余弦值（cos(theta1)）
+            s2 (float): 第2关节角度的正弦值（sin(theta2)）
+            c2 (float): 第2关节角度的余弦值（cos(theta2)）
+            s3 (float): 第3关节角度的正弦值（sin(theta3)）
+            c3 (float): 第3关节角度的余弦值（cos(theta3)）
+            s4 (float): 第4关节角度的正弦值（sin(theta4)）
+            c4 (float): 第4关节角度的余弦值（cos(theta4)）
+            
+        返回:
+            tuple: 包含以下元素的元组
+                x, y, z (float): 末端执行器的3D坐标
+                r00-r22 (float): 旋转矩阵的9个元素（3x3矩阵按行展开）
+                self.type_1: 类型参数1（具体含义取决于类实现）
+                self.type_2: 类型参数2（具体含义取决于类实现）
+        """
+        # 通过arctan2计算各关节的实际角度（避免象限问题）
+        theta0 = np.arctan2(s0, c0)
+        theta1 = np.arctan2(s1, c1)
+        theta2 = np.arctan2(s2, c2)
+        theta3 = np.arctan2(s3, c3)
+        theta4 = np.arctan2(s4, c4)
+
+        # 调用核心正运动学计算函数并返回结果
+        x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2=self.__forward_kinematics_math_for_training_core(theta0, theta1, theta2, theta3, theta4)
+        return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2
+    def __generate_inverse_kinematics_math(self):
+        
+        
 class RobotVisualizer:
     """Robot Visualization Class"""
     def __init__(self, kinematics_model):
