@@ -3,15 +3,49 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, CheckButtons
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib
+import math
+
 
 PI=np.pi
-# 设置中文字体
-plt.rcParams["font.family"] = ["SimHei", "WenQuanYi Micro Hei", "Heiti TC"]
-matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+
+def normalize_angle(theta, start=0, is_deg=False):
+    """
+    将角度归一化到以`start`为起点、长度为360°的区间内。
+    
+    参数：
+    theta (float)：输入角度值。
+    start (float)：目标区间起点（如-180、0等），区间为[start, start+360)。
+    is_deg (bool)：是否为角度值（True）或弧度值（False），默认True。
+    
+    返回：
+    float：归一化后的角度值，位于[start, start+360)区间内。
+    """
+    if is_deg:
+        # 角度值处理（单位：度）
+        interval_length = 360.0
+        # 先将角度归一化到[0, 360)
+        while theta< 0:
+            theta += 360
+        normalized_0_360 = theta % interval_length
+        # 映射到以start为起点的区间
+        normalized = normalized_0_360 + start
+        # 确保结果在[start, start+360)内
+        return normalized 
+    else:
+        # 弧度值处理（单位：弧度，区间长度为2π）
+        interval_length = 2 * math.pi
+        while theta< 0:
+            theta += 2 * math.pi
+        normalized_0_2pi = theta % interval_length
+        normalized = normalized_0_2pi + start
+        return normalized
 
 class RobotKinematics:
     """机器人运动学模型类"""
     def __init__(self, link_lengths=[0.5, 0.5, 0.5, 0]):
+        self.__type1="back" #theta1的类型
+        self.__type2="lower" #theta2的类型
         self.L1, self.L2, self.L3, self.L4 = link_lengths
         self.__x_adjust=0 # 初x始位置偏移量
         self.__y_adjust=0 # 初y始位置偏移量
@@ -101,6 +135,7 @@ class RobotKinematics:
     @property
     def p3(self)->float:
         return self.__p3
+    
     @property
     def p4(self)->float:
         return self.__p4
@@ -145,6 +180,12 @@ class RobotKinematics:
     def adjust_rotation_matrix(self)->np.ndarray:
         return self.__rotation_matrix
     
+    @property
+    def type_1(self)->str:
+        return self.__type1
+    @property
+    def type_2(self)->str:
+        return self.__type2
     @staticmethod
     def __zyz_rotation_matrix(alpha, beta, gamma):
         """
@@ -272,15 +313,15 @@ class RobotKinematics:
     
         
     def __set_theta0_math(self, value)->float:
-        self.__theta0_math=self.__theta0_adjust+value
+        self.__theta0_math=normalize_angle(self.__theta0_adjust+value, start=0, is_deg=False)
     def __set_theta1_math(self, value)->float:
-        self.__theta1_math=self.__theta1_adjust+value
+        self.__theta1_math=normalize_angle(self.__theta1_adjust+value, start=0, is_deg=False)
     def __set_theta2_math(self, value)->float:
-        self.__theta2_math=self.__theta2_adjust+value
+        self.__theta2_math=normalize_angle(self.__theta2_adjust+value, start=0, is_deg=False)
     def __set_theta3_math(self, value)->float:
-        self.__theta3_math=self.__theta3_adjust+value
+        self.__theta3_math=normalize_angle(self.__theta3_adjust+value, start=0, is_deg=False)
     def __set_theta4_math(self, value)->float:
-        self.__theta4_math=self.__theta4_adjust+value
+        self.__theta4_math=normalize_angle(self.__theta4_adjust+value, start=0, is_deg=False)
         
     
         
@@ -343,6 +384,13 @@ class RobotKinematics:
         返回值:
             None: 该函数通过内部方法更新机械臂的状态，不直接返回计算结果。
         """
+        
+        theta0=normalize_angle(theta0, start=0, is_deg=False)
+        theta1=normalize_angle(theta1, start=0, is_deg=False)
+        theta2=normalize_angle(theta2, start=0, is_deg=False)
+        theta3=normalize_angle(theta3, start=0, is_deg=False)
+        theta4=normalize_angle(theta4, start=0, is_deg=False)
+        
         self.__theta0=theta0
         self.__theta1=theta1
         self.__theta2=theta2
@@ -354,6 +402,18 @@ class RobotKinematics:
         self.__set_theta2_math(theta2)
         self.__set_theta3_math(theta3)
         self.__set_theta4_math(theta4)
+        target=PI/2
+        if(normalize_angle(self.__theta1_math+PI-target))>PI:
+            self.__type1="back"
+        else:
+            self.__type1="front"
+        target=0
+        if(normalize_angle(self.__theta3_math+PI-target))>PI:
+            self.__type2="lower"
+        else:
+            self.__type2="upper"
+
+        
         self.__forward_kinematics_math()
         self.turn_mathmatical_physical()
         return self.__T0, self.__T1, self.__T2, self.__T3, self.__T4, self.__p0, self.__p1, self.__p2, self.__p3, self.__p4
@@ -370,6 +430,7 @@ class RobotKinematics:
         :param theta4: 关节4角度（弧度）
         :return: 各个关节的变换矩阵和坐标
         """
+        
         T00 = self.dh_transform(self.__theta0_math, 0, 0,PI/2)  
         T01 = self.dh_transform(self.__theta1_math, 0, self.L1, 0)  
         T02 = self.dh_transform(self.__theta2_math, 0, self.L2, 0)  
@@ -398,7 +459,7 @@ class RobotKinematics:
         return T00, T01_total, T02_total, T03_total, T04_total, p0, p1, p2, p3, p4
 
 class RobotVisualizer:
-    """机器人可视化类"""
+    """Robot Visualization Class"""
     def __init__(self, kinematics_model):
         self.kinematics = kinematics_model
         self.theta0 = 0
@@ -413,35 +474,35 @@ class RobotVisualizer:
         self.fig = plt.figure(figsize=(12, 8))
         self.ax = self.fig.add_axes([0.1, 0.3, 0.6, 0.6], projection='3d')
         
-        # 固定坐标轴范围并设置等比例
+        # Set fixed axis limits and equal aspect ratio
         self.ax.set_xlim(-1.5, 1.5)
         self.ax.set_ylim(-1.5, 1.5)
         self.ax.set_zlim(0, 1.5)
-        self.ax.set_box_aspect([1, 1, 1])  # 关键：设置轴比例相等
+        self.ax.set_box_aspect([1, 1, 1])  # Key: Set equal axis ratio
         
-        self.ax.set_xlabel('X轴')
-        self.ax.set_ylabel('Y轴')
-        self.ax.set_zlabel('Z轴')
-        self.ax.set_title('五关节机器人运动学可视化（等比例坐标轴）')
+        self.ax.set_xlabel('X Axis')
+        self.ax.set_ylabel('Y Axis')
+        self.ax.set_zlabel('Z Axis')
+        self.ax.set_title('5-DOF Robot Kinematics Visualization (Equal Aspect Ratio)')
         
     def init_widgets(self):
         slider_color = 'lightgoldenrodyellow'
         self.sliders = [
             Slider(self.fig.add_axes([0.1, 0.22, 0.6, 0.03], facecolor=slider_color), 
-                   '基旋转θ0', -PI/2, PI/2, valinit=self.theta0),
+                   'Base Rotation θ0', -PI/2, PI/2, valinit=self.theta0),
             Slider(self.fig.add_axes([0.1, 0.19, 0.6, 0.03], facecolor=slider_color), 
-                   '关节1θ1', -PI, PI, valinit=self.theta1),
+                   'Joint 1 θ1', -PI, PI, valinit=self.theta1),
             Slider(self.fig.add_axes([0.1, 0.16, 0.6, 0.03], facecolor=slider_color), 
-                   '关节2θ2', -PI, PI, valinit=self.theta2),
+                   'Joint 2 θ2', -PI, PI, valinit=self.theta2),
             Slider(self.fig.add_axes([0.1, 0.13, 0.6, 0.03], facecolor=slider_color), 
-                   '关节3θ3', -PI, PI, valinit=self.theta3),
+                   'Joint 3 θ3', -PI, PI, valinit=self.theta3),
             Slider(self.fig.add_axes([0.1, 0.10, 0.6, 0.03], facecolor=slider_color), 
-                   '关节4θ4', -PI, PI, valinit=self.theta4)
+                   'Joint 4 θ4', -PI, PI, valinit=self.theta4)
         ]
         self.button_reset = Button(self.fig.add_axes([0.8, 0.15, 0.1, 0.04], facecolor=slider_color), 
-                                   '重置', hovercolor='0.975')
+                                   'Reset', hovercolor='0.975')
         self.check = CheckButtons(self.fig.add_axes([0.8, 0.25, 0.15, 0.20]), 
-                                  ['基坐标系', '关节1', '关节2', '关节3', '关节4'], 
+                                  ['Base Frame', 'Joint 1', 'Joint 2', 'Joint 3', 'Joint 4'], 
                                   [True, True, True, True, True])
         self.text_display = self.fig.add_axes([0.1, 0.02, 0.8, 0.05]).text(
             0.5, 0.5, "", ha='center', va='center', transform=self.fig.transFigure
@@ -459,25 +520,27 @@ class RobotVisualizer:
         
         self.ax.clear()
         
-        # 固定坐标轴范围（确保更新时不自动缩放）
+        # Fixed axis limits (prevent auto-scaling during updates)
         self.ax.set_xlim(-1.5, 1.5)
         self.ax.set_ylim(-1.5, 1.5)
         self.ax.set_zlim(0, 1.5)
-        self.ax.set_box_aspect([1, 1, 1])  # 更新时重新设置比例
+        self.ax.set_box_aspect([1, 1, 1])  # Reset aspect ratio during update
         
         self.plot_links([p0, p1, p2, p3, p4])
         self.plot_joints([p0, p1, p2, p3, p4])
         self.plot_frames([T00, T01, T02, T03, T04])
         
         self.text_display.set_text(
-            f"末端位置: ({p4[0]:.3f}, {p4[1]:.3f}, {p4[2]:.3f})\n"
+            f"End Effector Position: ({p4[0]:.3f}, {p4[1]:.3f}, {p4[2]:.3f})\n"
             f"θ0={self.theta0:.1f}° | θ1={self.theta1:.1f}° | θ2={self.theta2:.1f}° | θ3={self.theta3:.1f}° | θ4={self.theta4:.1f}°"
         )
         self.ax.legend(loc='upper left')
         self.fig.canvas.draw_idle()
+        print("type_1:"+self.kinematics.type_1)
+        print("type_2:"+self.kinematics.type_2)
         
     def plot_links(self, points):
-        links = [('b-', '连杆1'), ('g-', '连杆2'), ('r-', '连杆3')]
+        links = [('b-', 'Link 1'), ('g-', 'Link 2'), ('r-', 'Link 3')]
         for i in range(len(links)):
             self.ax.plot(
                 [points[i][0], points[i+1][0]],
@@ -488,12 +551,12 @@ class RobotVisualizer:
             
     def plot_joints(self, points):
         colors = ['black', 'black', 'black', 'black', 'purple']
-        labels = ['基原点', '关节1', '关节2', '关节3', '关节4(末端)']
+        labels = ['Base Origin', 'Joint 1', 'Joint 2', 'Joint 3', 'Joint 4 (End Effector)']
         for i, (p, c, lbl) in enumerate(zip(points, colors, labels)):
             self.ax.scatter(p[0], p[1], p[2], color=c, s=70 if i else 100, label=lbl)
             
     def plot_frames(self, transforms):
-        labels = ['基坐标系', '关节1', '关节2', '关节3', '关节4']
+        labels = ['Base Frame', 'Joint 1', 'Joint 2', 'Joint 3', 'Joint 4']
         status = self.check.get_status()
         for i in range(5):
             if status[i]:
@@ -519,16 +582,17 @@ class RobotVisualizer:
         self.update(None)
         
     def toggle_frame(self, label):
-        idx = ['基坐标系', '关节1', '关节2', '关节3', '关节4'].index(label)
+        idx = ['Base Frame', 'Joint 1', 'Joint 2', 'Joint 3', 'Joint 4'].index(label)
         status = self.check.get_status()
         status[idx] = not status[idx]
         self.check.set_status(status)
-        self.update(None)
-
+        self.update(None)    
+        
+        
 if __name__ == "__main__":
     kinematics = RobotKinematics(link_lengths=[0.5, 0.5, 0.5, 0])
-    kinematics.set_adjust_translation_vector([0.5, 0, 0])
-    kinematics.set_adjust_rotation_vector([np.pi/2, 0, 0])
+    # kinematics.set_adjust_translation_vector([0.5, 0, 0])
+    # kinematics.set_adjust_rotation_vector([np.pi/2, 0, 0])
     visualizer = RobotVisualizer(kinematics)
     plt.tight_layout()
     plt.show()
