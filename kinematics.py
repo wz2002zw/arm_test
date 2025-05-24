@@ -506,7 +506,7 @@ class RobotKinematics:
         
         return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2
     
-    def __forward_kinematics_math_for_training(self, s0, c0, s1, c1, s2, c2, s3, c3, s4, c4):
+    def forward_kinematics_math_for_training(self, s0, c0, s1, c1, s2, c2, s3, c3, s4, c4)->tuple:
         """
         计算五关节机器人的正运动学（用于训练场景）。
         
@@ -528,8 +528,8 @@ class RobotKinematics:
             tuple: 包含以下元素的元组
                 x, y, z (float): 末端执行器的3D坐标
                 r00-r22 (float): 旋转矩阵的9个元素（3x3矩阵按行展开）
-                self.type_1: 类型参数1（具体含义取决于类实现）
-                self.type_2: 类型参数2（具体含义取决于类实现）
+                type_1: 类型参数1（1为front,0为back）
+                type_2: 类型参数2（1为lower,0为upper） 
         """
         # 通过arctan2计算各关节的实际角度（避免象限问题）
         theta0 = np.arctan2(s0, c0)
@@ -537,11 +537,23 @@ class RobotKinematics:
         theta2 = np.arctan2(s2, c2)
         theta3 = np.arctan2(s3, c3)
         theta4 = np.arctan2(s4, c4)
-
+            # 调用核心计算方法
+        x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, type1, type2 = \
+            self._RobotKinematics__forward_kinematics_math_for_training_core(theta0, theta1, theta2, theta3, theta4)
+        self._RobotKinematics__type1 = type1
+        self._RobotKinematics__type2 = type2
         # 调用核心正运动学计算函数并返回结果
-        x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2=self.__forward_kinematics_math_for_training_core(theta0, theta1, theta2, theta3, theta4)
-        return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2
-    def __generate_inverse_kinematics_math(self):
+        # x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, self.type_1, self.type_2=self.__forward_kinematics_math_for_training_core(theta0, theta1, theta2, theta3, theta4)
+        if self.type_1=="front":
+            type_1=0
+        else:
+            type_1=1
+        if self.type_2=="lower":
+            type_2=0
+        else:
+            type_2=1
+        return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, type_1,type_2
+    
         
         
 class RobotVisualizer:
