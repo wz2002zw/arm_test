@@ -524,12 +524,12 @@ def test_servo_reset_and_sync():
         # 初始化: 将所有舵机移动到初始位置
         print("\n初始化: 将所有舵机移动到初始位置")
         test_targets = [
-            {'channel': 0, 'angle': 30, 'speed': 2},   # 30°@2°/s (15秒)
-            {'channel': 1, 'angle': 30, 'speed': 2},  
-            {'channel': 2, 'angle': 30, 'speed': 2},   
-            {'channel': 3, 'angle': 30, 'speed': 2},
-            {'channel': 4, 'angle': 30, 'speed': 2},
-            {'channel': 5, 'angle': 30, 'speed': 2}   
+            {'channel': 0, 'angle': 30, 'speed': 5},   # 30°@2°/s (15秒)
+            {'channel': 1, 'angle': 90, 'speed': 10},  
+            {'channel': 2, 'angle': 135, 'speed': 10},   
+            {'channel': 3, 'angle': 135, 'speed': 10},
+            {'channel': 4, 'angle': 30, 'speed': 5},
+            {'channel': 5, 'angle': 30, 'speed': 5}   
         ]
         time.sleep(1)
         print("==== 舵机归零与同步到达测试 ====")
@@ -576,67 +576,24 @@ def test_servo_reset_and_sync():
     except Exception as e:
         print(f"测试错误: {e}")
     finally:
-        # 测试结束后执行缓慢归零（核心修改点）
-        print("\n[等待2秒后执行舵机缓慢归零...]")
-        time.sleep(2)  # 添加2秒延时
-        print("\n[测试后处理] 执行舵机缓慢归零...")
-        for channel in sorted(controller.servo_config.keys()):
-            print(f"舵机 {channel} 开始缓慢归零...")
-            controller.set_angle_with_speed(
-                channel, 
-                target_angle=0, 
-                angular_speed=3,  # 3°/秒更低速度，确保安全
-                fixed_delay=0.02   # 增加延时，进一步降低电流
-            )
-            time.sleep(1)  # 每个舵机归零后等待1秒，避免同时运动
+        # 等待用户确认是否执行归零
+        user_input = input("\n是否执行舵机归零操作？输入 Y 确认，其他键跳过: ").strip().upper()
         
-        print("所有舵机已安全归零，测试完成")
-def demo_servo_pulse_control():
-    """脉冲宽度控制舵机测试 - 允许输入脉冲值(us)直接控制舵机"""
-    controller = ServoController(50)
-    
-    # 添加舵机配置（通道0，设置较大的脉冲范围以支持270度舵机）
-    controller.add_servo(5, min_pulse=250, max_pulse=2500, max_angle=270)
-    print("脉冲宽度控制舵机测试已启动")
-    print("支持的脉冲范围: 500-2500us (建议从1000开始测试)")
-    print("输入 'q' 或 'quit' 退出测试")
-    
-    try:
-        while True:
-            # 获取用户输入的脉冲值
-            pulse_input = input("\n请输入脉冲宽度(us)或输入'q'退出: ")
+        if user_input == 'Y':
+            print("\n[测试后处理] 执行舵机缓慢归零...")
+            for channel in sorted(controller.servo_config.keys()):
+                print(f"舵机 {channel} 开始缓慢归零...")
+                controller.set_angle_with_speed(
+                    channel, 
+                    target_angle=0, 
+                    angular_speed=3,  # 3°/秒更低速度，确保安全
+                    fixed_delay=0.02   # 增加延时，进一步降低电流
+                )
+                time.sleep(1)  # 每个舵机归零后等待1秒，避免同时运动
             
-            # 退出条件
-            if pulse_input.lower() in ['q', 'quit', 'exit']:
-                break
-                
-            # 验证输入是否为数字
-            if not pulse_input.isdigit():
-                print("错误: 请输入有效的数字")
-                continue
-                
-            pulse = int(pulse_input)
-            
-            # 限制脉冲范围
-            if pulse < 500 or pulse > 2500:
-                print(f"警告: 脉冲值应在500-2500us之间，当前输入{pulse}us已被限制")
-                pulse = max(500, min(2500, pulse))
-            
-            # 发送脉冲控制舵机
-            controller.pwm.setServoPulse(0, pulse)
-            current_angle = controller.get_angle(0)
-            print(f"已发送脉冲: {pulse}us, 当前角度: {current_angle:.1f}°")
-            
-    except KeyboardInterrupt:
-        print("\n程序被中断")
-    except Exception as e:
-        print(f"发生错误: {e}")
-    finally:
-        # 测试完成后将舵机归位到中间位置
-        print("测试结束，将舵机归位...")
-        controller.pwm.setServoPulse(0, 1500)  # 中间位置脉冲
-        time.sleep(1)
-        print("舵机已归位")
+            print("所有舵机已安全归零，测试完成")
+        else:
+            print("已跳过归零操作，舵机将保持当前位置")
 def test_servo_speed_incremental_sync():
     """测试舵机在不同速度下的同步性能，支持速度递增测试并记录数据"""
     controller = ServoController(50)
@@ -668,7 +625,7 @@ def test_servo_speed_incremental_sync():
         print(f"测试角度: {test_angles}°")
         print(f"汇总数据将记录到: {summary_file}")
         
-        current_speed = 280  # 初始速度为1°/秒
+        current_speed = 5  # 初始速度为1°/秒
         
         while True:
             print(f"\n==== 开始速度 {current_speed}°/秒 的同步测试 ====")
@@ -835,8 +792,92 @@ def test_servo_speed_incremental_sync():
         for channel in controller.servo_config.keys():
             controller.set_angle_with_speed(channel, 0, angular_speed=3, fixed_delay=0.02)
         print(f"所有舵机已安全归零，汇总数据已保存至 {summary_file}")
+def interactive_servo_control():
+    """交互式舵机控制程序"""
+    controller = ServoController(50)
+    
+    # 添加六个舵机配置
+    controller.add_servo(0, min_pulse=250, max_pulse=1306, max_angle=270)
+    controller.add_servo(1, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(2, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(3, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(4, min_pulse=250, max_pulse=1283, max_angle=270)
+    controller.add_servo(5, min_pulse=250, max_pulse=1306, max_angle=270)
+    
+    try:
+        print("\n==== 交互式舵机控制 ====")
+        print("输入格式：角度1,速度1,角度2,速度2,...,角度6,速度6")
+        print("例如：30,10,60,15,90,20,120,5,150,10,180,15")
+        print("输入q退出程序（不会自动回归预设位置）")
+        
+        while True:
+            user_input = input("\n请输入舵机参数或q退出：").strip().lower()
+            
+            # 退出条件
+            if user_input == 'q':
+                print("\n程序已退出，舵机将保持当前位置")
+                break
+                
+            # 解析用户输入
+            try:
+                params = [float(p.strip()) for p in user_input.split(',')]
+                
+                # 验证输入格式
+                if len(params) != 12:
+                    raise ValueError("输入格式错误，必须包含12个数值（6个角度和6个速度）")
+                
+                # 生成控制命令
+                commands = []
+                for i in range(6):
+                    angle = params[i*2]
+                    speed = params[i*2 + 1]
+                    
+                    # 验证角度和速度范围
+                    if angle < 0 or angle > 270:
+                        raise ValueError(f"舵机{i+1}的角度必须在0-270度之间")
+                    if speed <= 0 or speed > 100:
+                        print(f"警告：舵机{i+1}的速度{speed}超出合理范围(1-100度/秒)，已自动限制")
+                        speed = max(1, min(100, speed))
+                    
+                    commands.append({
+                        'channel': i,
+                        'target_angle': angle,
+                        'angular_speed': speed
+                    })
+                
+                # 执行控制命令
+                print("\n执行命令：")
+                for i, cmd in enumerate(commands):
+                    print(f"舵机{i+1}: {cmd['target_angle']}° @ {cmd['angular_speed']}°/秒")
+                
+                controller.synchronized_servo_control(commands)
+                
+                # 显示当前角度
+                print("\n当前各舵机角度：")
+                for i in range(6):
+                    current_angle = controller.get_angle(i)
+                    print(f"舵机{i+1}: {current_angle:.1f}°")
+                
+            except ValueError as ve:
+                print(f"输入错误：{ve}")
+            except Exception as e:
+                print(f"执行错误：{e}")
+                
+    except KeyboardInterrupt:
+        print("\n程序被中断，舵机将保持当前位置")
+        
+    finally:
+        # 仅释放资源，不移动舵机
+        try:
+            controller.pwm.set_all_pwm(0, 0)  # 停止所有PWM输出
+            controller.pwm.reset()  # 重置PCA9685芯片
+        except:
+            pass
+        print("程序已安全退出")    
 if __name__ == "__main__":
     # demo_180_degree_servo()
     # demo_demo_180_degree_servo_test()
-    test_servo_speed_incremental_sync()
+    # test_servo_reset_and_sync()
+    #  test_servo_speed_incremental_sync()
     # demo_servo_pulse_control()
+    interactive_servo_control()
