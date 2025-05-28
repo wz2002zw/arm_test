@@ -4,10 +4,34 @@ from matplotlib.widgets import Slider, Button, CheckButtons
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib
 import math
-
-
+import copy
+from minimal_rotation_z_axis_aligner  import align_z_axis_to_global_z
 PI=np.pi
 
+def T_rotate_z(theta):
+    """
+    生成绕Z轴旋转的4x4齐次变换矩阵
+    
+    参数:
+    theta (float): 旋转角度（弧度），正值表示逆时针旋转
+    
+    返回:
+    np.ndarray: 4x4齐次变换矩阵
+    """
+    # 计算旋转矩阵的元素
+    c = np.cos(theta)
+    s = np.sin(theta)
+    
+    # 构建4x4齐次变换矩阵
+    T = np.array([
+        [c, -s, 0, 0],
+        [s,  c, 0, 0],
+        [0,  0, 1, 0],
+        [0,  0, 0, 1]
+    ])
+    
+    return T
+    
 
 def normalize_angle(theta, start=0, is_deg=False):
     """
@@ -418,7 +442,96 @@ class RobotKinematics:
         self.turn_mathmatical_physical()
         return self.__T0, self.__T1, self.__T2, self.__T3, self.__T4, self.__p0, self.__p1, self.__p2, self.__p3, self.__p4
         
-         
+    def inverse_kinematics(self, x, y, z,alpha,beta,gamma):
+        """
+        计算机械臂的逆运动学（Inverse Kinematics），根据给定的末端执行器位置计算关节角度。
+
+        参数:
+            x (float): 末端执行器的x坐标（单位：米）
+            y (float): 末端执行器的y坐标（单位：米）
+            z (float): 末端执行器的z坐标（单位：米）
+            alpha (float): 末端执行器的z轴旋转角度（单位：弧度）
+            beta (float): 末端执行器的y轴旋转角度（单位：弧度）
+            gamma (float): 末端执行器的z轴旋转角度（单位：弧度）
+        """
+        transformation = np.eye(4)
+        translation_vector = np.array([x, y, z])
+        rotation_matrix=self.__zyz_rotation_matrix(alpha,beta,gamma)
+        transformation[:3, :3] = rotation_matrix
+        transformation[:3, 3] = translation_vector
+        self.inverse_kinematics_core(x,y,z,transformation)
+        
+    def normalize_angle(self,angle):
+        while angle<0:
+            angle += 2*PI
+        if angle>2*PI:
+            angle=angle%(2*PI)
+        return angle
+    def inverse_kinematics_core(self,x,y,z,trans):
+        # 填充旋转部分
+        transformation=np.eye(4)
+        transformation[:3, :3]=trans
+        transformation[:3,3]=[x,y,z]
+        
+        rotation_matrix= trans
+        # 填充平移部分
+        self.__T4=copy.deepcopy(transformation)
+        # self.__thet4=self.__get_theta4(self.__T4)
+        rotation_matrix_dot=align_z_axis_to_global_z(rotation_matrix)
+        cos_tmp=rotation_matrix_dot[0,0]
+        sin_tmp=rotation_matrix_dot[1,0]
+        self.__theta4=copy.deepcopy(np.arctan2(sin_tmp,cos_tmp))
+        self.__theta4=self.__theta4-PI
+        self.__theta4=self.normalize_angle(self.__theta4)
+        
+        self.normalize_angle(self.__theta4)
+        T14=self.dh_transform(PI/2, 0, 0, PI/2)  # 关节4相对于关节3的变换
+        T04 = np.dot(T14,self.dh_transform(self.__theta4, 0, self.L4, 0)) 
+        transformation=self.__T4 @ np.linalg.inv(T04)
+        self.__T3=copy.deepcopy(transformation)
+        
+        z = self.__T4[2, :3]  # 变换矩阵T4的第三行（Z轴方向）
+        x = self.__T3[0, :3]  # 变换矩阵T3的第一行（X轴方向）
+
+        # 归一化向量
+        z_normalized = z / np.linalg.norm(z)
+        x_normalized = x / np.linalg.norm(x)
+
+        # 计算点积（注意要限制在[-1, 1]范围内，避免数值误差）
+        dot_product = np.clip(np.dot(z_normalized, x_normalized), -1.0, 1.0)
+
+        # 计算夹角（弧度）
+        angle = np.arccos(dot_product)
+
+        # 用π减去这个角度
+        result_angle = np.pi - angle
+        self.__theta3=copy.deepcopy(result_angle)
+        self.__T2=copy.deepcopy(self.__T3 @ np.linalg.inv(self.dh_transform(-angle, 0, -self.L3, 0)))
+        
+        
+        x_T3 = self.__T3[0, :3]  # 变换矩阵T3的第一行（X轴方向）
+        x_T2 = self.__T2[0, :3]  # 变换矩阵T2的第一行（X轴方向）
+        x_T3_normalized = x_T3 / np.linalg.norm(x_T3)
+        x_T2_normalized = x_T2 / np.linalg.norm(x_T2)
+        
+        
+        dot_product = np.clip(np.dot(x_T3_normalized, x_T2_normalized), -1.0, 1.0)
+        angle = np.arccos(dot_product)
+        self.__theta2=copy.deepcopy(angle)
+        self.__T1=copy.deepcopy(self.__T2 @ np.linalg.inv(self.dh_transform(-angle, 0, -self.L2, 0)))
+        
+        x_T1 = self.__T1[0, :3]
+        x_T1_normalized = x_T1 / np.linalg.norm(x_T1)
+        dot_product = np.clip(np.dot(x_T1_normalized, x_T2_normalized), -1.0, 1.0)
+        angle = np.arccos(dot_product)
+        self.__theta1=copy.deepcopy(angle)
+        T0_tmp=self.__T1@self.dh_transform(self.__theta1, 0, self.L1, 0)
+        T0_tmp=T0_tmp@self.dh_transform(0, 0, 0,-PI/2) 
+        cos_tmp=T0_tmp[0,0]
+        sin_tmp=T0_tmp[1,0]
+        self.__theta0=copy.deepcopy(np.arctan2(sin_tmp,cos_tmp))
+        return self.__theta0, self.__theta1, self.__theta2, self.__theta3, self.__theta4
+        
         
     def __forward_kinematics_math(self):
         """
@@ -553,6 +666,50 @@ class RobotKinematics:
         else:
             type_2=1
         return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, type_1,type_2
+    
+    def inverse_kinematics(self, T_target):
+        """
+        逆运动学计算
+        
+        参数:
+            T_target: 目标位姿的4x4变换矩阵
+            
+        返回:
+            各关节角度 [theta0, theta1, theta2, theta3, theta4]
+        """
+        cosine_law_angle = lambda a, b, r: np.arccos((a**2 + b**2 - r**2) / (2 * a * b))
+        # 提取末端执行器的位置和姿态
+        px, py, pz = T_target[0, 3], T_target[1, 3], T_target[2, 3]
+        R_target = T_target[:3, :3]
+        R=align_z_axis_to_global_z(R_target)
+        theta4=np.arctan2(R[1, 0], R[0, 0])
+        
+        # 计算手腕中心位置
+        # 从末端位置减去手腕长度向量（沿z轴方向）
+        nx, ny, nz = R_target[0, 2], R_target[1, 2], R_target[2, 2]
+        
+        wx = px - self.L3 * nx
+        wy = py - self.L3 * ny
+        wz = pz - self.L3 * nz
+        if nx  == 0 and ny == 0:
+            y_cal = wy
+            x_cal = wx
+        else:
+            y_cal =wy
+            x_cal = wx
+        
+        # 关节0：绕基坐标系z轴旋转
+        theta0 = np.arctan2(y_cal, x_cal)
+        theta0 += PI
+        
+        # 简化计算，考虑关节0旋转后的坐标系
+        r = np.sqrt(wx**2 + wy**2)
+        theta1=cosine_law_angle(self.L1,r,self.L2)
+        theta2=cosine_law_angle(self.L2,self.L1,r)
+        theta3=0
+        
+        return [theta0, theta1, theta2, theta3, theta4]
+
     
         
         
@@ -689,8 +846,9 @@ class RobotVisualizer:
         
 if __name__ == "__main__":
     kinematics = RobotKinematics(link_lengths=[0.5, 0.5, 0.5, 0])
-    # kinematics.set_adjust_translation_vector([0.5, 0, 0])
-    # kinematics.set_adjust_rotation_vector([np.pi/2, 0, 0])
-    visualizer = RobotVisualizer(kinematics)
-    plt.tight_layout()
-    plt.show()
+    kinematics.forward_kinematics(np.pi/4, np.pi/3, np.pi/4, np.pi/4, np.pi/3)
+    # visualizer = RobotVisualizer(kinematics)
+    kinematics.inverse_kinematics(kinematics.T4)
+
+    # plt.tight_layout()
+    # plt.show()
