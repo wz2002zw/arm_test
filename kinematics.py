@@ -32,7 +32,46 @@ def T_rotate_z(theta):
     
     return T
     
+def T_rotate_x(theta):
+    """
+    生成绕X轴旋转的4x4齐次变换矩阵
+    
+    参数:
+    theta (float): 旋转角度（弧度），正值表示逆时针旋转
+    
+    返回:
+    np.ndarray: 4x4齐次变换矩阵
+    """
+    c= np.cos(theta)
+    s= np.sin(theta)
+    T=np.array([
+        [1, 0, 0, 0],
+        [0, c, -s, 0],
+        [0, s, c, 0],
+        [0, 0, 0, 1]
+    ])
+    return T
+def T_rotate_y(theta):
+    """
+    生成绕Y轴旋转的4x4齐次变换矩阵
 
+    参数:
+    theta (float): 旋转角度（弧度），正值表示逆时针旋转
+    
+    返回:
+    np.ndarray: 4x4齐次变换矩阵
+    """
+    c = np.cos(theta)
+    s = np.sin(theta)
+    
+    T = np.array([
+        [c, 0, s, 0],
+        [0, 1, 0, 0],
+        [-s, 0, c, 0],
+        [0, 0, 0, 1]
+    ])
+    
+    return T
 def normalize_angle(theta, start=0, is_deg=False):
     """
     将角度归一化到以`start`为起点、长度为360°的区间内。
@@ -65,6 +104,29 @@ def normalize_angle(theta, start=0, is_deg=False):
         normalized = normalized_0_2pi + start
         return normalized
 
+
+def rotx(theta):
+    """绕x轴旋转的旋转矩阵"""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[1, 0, 0],
+                     [0, c, -s],
+                     [0, s, c]])
+def roty(theta):
+    """绕y轴旋转的旋转矩阵"""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, 0, s],
+                     [0, 1, 0],
+                     [-s, 0, c]])
+def rotz(theta):
+    """绕z轴旋转的旋转矩阵"""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, -s, 0],
+                     [s, c, 0],
+                     [0, 0, 1
+                      ]])
+    
+    
+    
 class RobotKinematics:
     """机器人运动学模型类"""
     def __init__(self, link_lengths=[0.5, 0.5, 0.5, 0]):
@@ -442,18 +504,17 @@ class RobotKinematics:
         self.turn_mathmatical_physical()
         return self.__T0, self.__T1, self.__T2, self.__T3, self.__T4, self.__p0, self.__p1, self.__p2, self.__p3, self.__p4
         
-    def inverse_kinematics(self, x, y, z,alpha,beta,gamma):
+    def inverse_kinematics(self, T_target):
         """
-        计算机械臂的逆运动学（Inverse Kinematics），根据给定的末端执行器位置计算关节角度。
-
+        逆运动学计算
+        
         参数:
-            x (float): 末端执行器的x坐标（单位：米）
-            y (float): 末端执行器的y坐标（单位：米）
-            z (float): 末端执行器的z坐标（单位：米）
-            alpha (float): 末端执行器的z轴旋转角度（单位：弧度）
-            beta (float): 末端执行器的y轴旋转角度（单位：弧度）
-            gamma (float): 末端执行器的z轴旋转角度（单位：弧度）
+            T_target: 目标位姿的4x4变换矩阵
+            
+        返回:
+            各关节角度 [theta0, theta1, theta2, theta3, theta4]
         """
+        
         transformation = np.eye(4)
         translation_vector = np.array([x, y, z])
         rotation_matrix=self.__zyz_rotation_matrix(alpha,beta,gamma)
@@ -667,7 +728,16 @@ class RobotKinematics:
             type_2=1
         return x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22, type_1,type_2
     
-    def inverse_kinematics(self, T_target):
+    def inverse_kinematics(self,T_target,type="lower"):
+        """
+        逆运动学计算
+        
+        参数:
+            T_target: 目标位姿的4x4变换矩阵
+            
+        返回:
+            各关节角度 [theta0, theta1, theta2, theta3, theta4]
+        """
         """
         逆运动学计算
         
@@ -678,39 +748,122 @@ class RobotKinematics:
             各关节角度 [theta0, theta1, theta2, theta3, theta4]
         """
         cosine_law_angle = lambda a, b, r: np.arccos((a**2 + b**2 - r**2) / (2 * a * b))
+        x,y,z=T_target[:3,3]
+        theta0=np.arctan2(y,x)+np.pi
+        T_target_mod=T_rotate_z(-theta0)@T_target
+        R_part=T_target_mod[:3,:3]
+        R_tmp=align_z_axis_to_global_z(R_part)
+        theta4=np.arctan2(R_tmp[1,0],R_tmp[0,0])+np.pi
+        
+        
         # 提取末端执行器的位置和姿态
-        px, py, pz = T_target[0, 3], T_target[1, 3], T_target[2, 3]
-        R_target = T_target[:3, :3]
-        R=align_z_axis_to_global_z(R_target)
-        theta4=np.arctan2(R[1, 0], R[0, 0])
+        T_target_mod_xz=T_target_mod@T_rotate_z(-theta4)
+        px, py, pz = T_target_mod_xz[:3, 3]
+        R_target = T_target_mod_xz[:3, :3]
         
         # 计算手腕中心位置
         # 从末端位置减去手腕长度向量（沿z轴方向）
-        nx, ny, nz = R_target[0, 2], R_target[1, 2], R_target[2, 2]
-        
+        nx, ny, nz = R_target[:3, 2]
         wx = px - self.L3 * nx
         wy = py - self.L3 * ny
         wz = pz - self.L3 * nz
-        if nx  == 0 and ny == 0:
-            y_cal = wy
-            x_cal = wx
+        alpha = np.arctan2(wz, wx)
+        r = np.sqrt(wx**2 + wz**2)
+        theta1_tmp=cosine_law_angle(self.L1,r,self.L2)
+        if type=="lower":
+            theta1=alpha-theta1_tmp
         else:
-            y_cal =wy
-            x_cal = wx
-        
-        # 关节0：绕基坐标系z轴旋转
-        theta0 = np.arctan2(y_cal, x_cal)
-        theta0 += PI
-        
-        # 简化计算，考虑关节0旋转后的坐标系
-        r = np.sqrt(wx**2 + wy**2)
-        theta1=cosine_law_angle(self.L1,r,self.L2)
-        theta2=cosine_law_angle(self.L2,self.L1,r)
-        theta3=0
-        
+            theta1=alpha+theta1_tmp
+            
+        theta2_tmp=cosine_law_angle(self.L1,self.L2,r)
+        theta2=np.pi-theta2_tmp
+        T00=np.eye(4)@self.dh_transform(0,0,0,PI/2)
+        T01 = self.dh_transform(theta1, 0, self.L1, 0)
+        T02 = self.dh_transform(theta2, 0, self.L2, 0) 
+        T01_total = np.dot(T00, T01)
+        T02_total = np.dot(T01_total, T02)
+        a=np.array([T02_total[0,0],T02_total[2,0]])
+        b=np.array([T_target_mod_xz[0,0],T_target_mod_xz[2,0]])
+        cross = a[0] * b[1] - a[1] * b[0]  # 二维叉积（行列式）
+        dot = np.dot(a, b)
+        theta3 = np.arctan2(cross, dot)  # 直接使用ar
+        theta3 = np.pi-theta3
         return [theta0, theta1, theta2, theta3, theta4]
 
-    
+
+    def _plot_coordinate_system(self, ax, T, scale=0.2, label=None):
+        """Helper function: Plot coordinate system"""
+        origin = T[:3, 3]
+        R = T[:3, :3]
+        
+        # X-axis (red)
+        end_x = origin + R[:, 0] * scale
+        ax.plot([origin[0], end_x[0]], [origin[1], end_x[1]], [origin[2], end_x[2]], 'r-')
+        
+        # Y-axis (green)
+        end_y = origin + R[:, 1] * scale
+        ax.plot([origin[0], end_y[0]], [origin[1], end_y[1]], [origin[2], end_y[2]], 'g-')
+        
+        # Z-axis (blue)
+        end_z = origin + R[:, 2] * scale
+        ax.plot([origin[0], end_z[0]], [origin[1], end_z[1]], [origin[2], end_z[2]], 'b-')
+        
+        # Add label
+        if label:
+            ax.text(origin[0], origin[1], origin[2], label)
+  
+    def plot_robot(self,ax=None):
+        """Visualize robot configuration"""
+        if ax is None:
+            fig = plt.figure(figsize=(10, 8))
+            ax = fig.add_subplot(111, projection='3d')
+            
+        # Plot joint positions
+        p0 = self.__T0[:3, 3]
+        p1 = self.__T1[:3, 3]
+        p2 = self.__T2[:3, 3]
+        p3 = self.__T3[:3, 3]
+        p4 = self.__T4[:3, 3]
+        
+        # Plot links
+        ax.plot([p0[0], p1[0]], [p0[1], p1[1]], [p0[2], p1[2]], 'b-', linewidth=3)
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], 'g-', linewidth=3)
+        ax.plot([p2[0], p3[0]], [p2[1], p3[1]], [p2[2], p3[2]], 'r-', linewidth=3)
+        ax.plot([p3[0], p4[0]], [p3[1], p4[1]], [p3[2], p4[2]], 'm-', linewidth=3)
+        
+        # Plot joints
+        ax.scatter(p0[0], p0[1], p0[2], c='k', s=50, marker='o')
+        ax.scatter(p1[0], p1[1], p1[2], c='k', s=50, marker='o')
+        ax.scatter(p2[0], p2[1], p2[2], c='k', s=50, marker='o')
+        ax.scatter(p3[0], p3[1], p3[2], c='k', s=50, marker='o')
+        ax.scatter(p4[0], p4[1], p4[2], c='k', s=50, marker='o')
+        
+        # Plot coordinate systems
+        self._plot_coordinate_system(ax, self.__T0, scale=0.2, label='Base')
+        self._plot_coordinate_system(ax, self.__T1, scale=0.2, label='Joint1')
+        self._plot_coordinate_system(ax, self.__T2, scale=0.2, label='Joint2')
+        self._plot_coordinate_system(ax, self.__T3, scale=0.2, label='Joint3')
+        self._plot_coordinate_system(ax, self.__T4, scale=0.3, label='End Effector')
+        
+        # Set plot properties
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_xlim([-1.5, 1.5])
+        ax.set_ylim([-1.5, 1.5])
+        ax.set_zlim([0, 2.0])
+        ax.set_title('Robot Kinematics Visualization')
+        
+        # Display joint angles
+        angles_deg = [np.rad2deg(angle) for angle in 
+                    [self.__theta0, self.__theta1, self.__theta2, self.__theta3, self.__theta4]]
+        ax.text2D(0.05, 0.95, 
+                f'theta0: {angles_deg[0]:.1f}, theta1: {angles_deg[1]:.1f}, theta2: {angles_deg[2]:.1f}\n'
+                f'theta3: {angles_deg[3]:.1f}, theta4: {angles_deg[4]:.1f}', 
+                transform=ax.transAxes)
+        
+        plt.tight_layout()
+        plt.show()
         
         
 class RobotVisualizer:

@@ -97,8 +97,8 @@ def update(val):
     # Set plot properties
     ax.set_xlim([-1.5, 1.5])
     ax.set_ylim([-1.5, 1.5])
-    ax.set_zlim([0, 3])
     ax.set_xlabel('X')
+    ax.set_zlim([0, 3])
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.set_title('Rotation Matrix Z-Axis Alignment Visualization')

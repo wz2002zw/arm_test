@@ -5,6 +5,26 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import Slider
 import copy
 
+
+def rotx(theta):
+    """绕x轴旋转的旋转矩阵"""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[1, 0, 0],
+                     [0, c, -s],
+                     [0, s, c]])
+def roty(theta):
+    """绕y轴旋转的旋转矩阵"""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, 0, s],
+                     [0, 1, 0],
+                     [-s, 0, c]])
+def rotz(theta):
+    """绕z轴旋转的旋转矩阵"""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, -s, 0],
+                     [s, c, 0],
+                     [0, 0, 1
+                      ]])
 class RobotKinematics:
     """机器人运动学库，包含正运动学和逆运动学计算"""
     
@@ -103,6 +123,7 @@ class RobotKinematics:
         返回:
             各关节角度 [theta0, theta1, theta2, theta3, theta4]
         """
+        cosine_law_angle = lambda a, b, r: np.arccos((a**2 + b**2 - r**2) / (2 * a * b))
         # 提取末端执行器的位置和姿态
         px, py, pz = T_target[0, 3], T_target[1, 3], T_target[2, 3]
         R_target = T_target[:3, :3]
@@ -110,17 +131,26 @@ class RobotKinematics:
         # 计算手腕中心位置
         # 从末端位置减去手腕长度向量（沿z轴方向）
         nx, ny, nz = R_target[0, 2], R_target[1, 2], R_target[2, 2]
-        wx = px - self.L4 * nx
-        wy = py - self.L4 * ny
-        wz = pz - self.L4 * nz
-        
-        # 关节0：绕基坐标系z轴旋转
+        wx = px - self.L3 * nx
+        wy = py - self.L3 * ny
+        wz = pz - self.L3 * nz
         theta0 = np.arctan2(wy, wx)
+        T_tmp= rotz(-theta0/1)@R_target
         
+        nx, ny, nz =  T_tmp[0, 2],  T_tmp[1, 2],  T_tmp[2, 2]
+        # 关节0：绕基坐标系z轴旋转
+        
+        T_tmp_1=align_z_axis_to_global_z(T_tmp)
+        theta4 = np.arctan2(T_tmp_1[1,0],T_tmp_1[0,0])+np.pi
+        px,py,pz=rotz(-theta0/1)@[px,py,pz]
+        wx = px - self.L3 * nx
+        wy = py - self.L3 * ny
+        wz = pz - self.L3 * nz
         # 简化计算，考虑关节0旋转后的坐标系
-        r = np.sqrt(wx**2 + wy**2)
+        r = np.sqrt(wx**2 + wz**2)
         z = wz - self.L1
-        
+        x_vector=T_tmp[0,2]
+        z_vector=T_tmp[2,2]
         # 关节1和关节2：解两连杆平面机构
         D = (r**2 + z**2 - self.L2**2) / (2 * self.L2)
         if abs(D) > 1:
@@ -157,11 +187,12 @@ class RobotKinematics:
         while angle < -self.PI:
             angle += 2 * self.PI
         return angle    
-    def plot_robot(self):
+    def plot_robot(self,ax=None):
         """Visualize robot configuration"""
-        fig = plt.figure(figsize=(10, 8))
-        ax = fig.add_subplot(111, projection='3d')
-        
+        if ax is None:
+            fig = plt.figure(figsize=(10, 8))
+            ax = fig.add_subplot(111, projection='3d')
+            
         # Plot joint positions
         p0 = self.__T0[:3, 3]
         p1 = self.__T1[:3, 3]
@@ -338,7 +369,7 @@ class RobotKinematics:
 # Example usage
 if __name__ == "__main__":
     # Create robot instance (units: meters)
-    robot = RobotKinematics(L1=0.5, L2=0.4, L3=0.3, L4=0.2)
+    robot = RobotKinematics(L1=0.5, L2=0.4, L3=0.3, L4=0)
     
     # ===== Forward Kinematics Example =====
     print("\n===== Forward Kinematics Example =====")
